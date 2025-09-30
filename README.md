@@ -222,6 +222,31 @@ To train on your custom dataset, you need to organize it in the COCO format. Fol
       collate_fn:
         type: BatchImageCollateFunction
     ```
+5. **Update `deimv2_dinov3_${model}_coco.yml`**
+
+    Add custom_detection.yml in  `deimv2_dinov3_${model}_coco.yml`: 
+
+    ```yaml
+    __include__: [
+      '../dataset/custom_detection.yml',
+      '../runtime.yml',
+      '../base/dataloader.yml',
+      '../base/optimizer.yml',
+      '../base/deimv2.yml',
+    ]
+
+    output_dir: ./outputs/deimv2_dinov3_s_coco
+
+    DEIM:
+      backbone: DINOv3STAs
+
+    DINOv3STAs:
+      name: vit_tiny
+      embed_dim: 192
+      weights_path: ./ckpts/vitt_distill.pt
+      interaction_indexes: [5,8,11]   # only need the [1/8, 1/16, 1/32]
+      num_heads: 3
+    ```
 
 </details>
 
