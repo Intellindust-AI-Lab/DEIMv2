@@ -246,6 +246,7 @@ To train on your custom dataset, you need to organize it in the COCO format. Fol
       weights_path: ./ckpts/vitt_distill.pt
       interaction_indexes: [5,8,11]   # only need the [1/8, 1/16, 1/32]
       num_heads: 3
+    ...
     ```
 
 </details>
