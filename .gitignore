@@ -142,3 +142,6 @@ dmypy.json
 *.zip
 *.html
 .DS_Store
+
+# Ignore FiftyOne saved predictions
+saved_predictions_view/
