@@ -1,0 +1,118 @@
+__include__: [
+  '../dataset/coco_pose.yml',
+  '../runtime.yml',
+  '../base/dataloader.yml',
+  '../base/optimizer.yml',
+  '../base/deimv2_pose.yml',
+]
+
+
+output_dir: ./outputs/deimv2_pose_dinov3_splus
+
+DEIMv2Pose:
+  backbone: DINOv3STAs
+  encoder: HybridEncoder
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+
+  # intra
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  nhead: 8
+  dim_feedforward: 1024
+  dropout: 0.
+  enc_act: 'gelu'
+
+  # cross
+  expansion: 1.25
+  depth_mult: 1.37
+  act: 'silu'
+
+  # New
+  version: deim
+  csp_type: csp2
+  fuse_op: sum
+
+
+DINOv3STAs:
+  name: dinov3_vits16plus
+  weights_path: /ckpts/dinov3/dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth
+  interaction_indexes: [10, 11]  
+  finetune: True
+  conv_inplane: 64
+  hidden_dim: 256
+
+
+Transformer:
+  hidden_dim: 256
+  dim_feedforward: 2048
+  num_decoder_layers: 6
+
+epoches: 52 
+grad_accum_steps: 2
+
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [2000]
+  gamma: 0.1
+
+
+## Optimizer
+optimizer:
+  type: AdamW
+  params: 
+    -
+      params: '^(?=.*.dinov3)(?!.*(?:norm|bn|bias)).*$'  
+      lr: 0.000025
+    -
+      params: '^(?=.*.dinov3)(?=.*(?:norm|bn|bias)).*$'    
+      lr: 0.000025
+      weight_decay: 0.
+    - 
+      params: '^(?=.*(?:sta|encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0001
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+
+## Dense O2O: Mosaic + Mixup + CopyBlend
+train_dataloader: 
+  dataset: 
+    transforms:
+      ops:
+        - {type: PoseMosaic, output_size: 320, probability: 0.5}
+        - {type: MixUpCopyPaste, mixup_prob: 0.5, copypaste_prob: 1.0}
+        - {type: RandomZoomOut, p: 0.5}
+        - {type: RandomHorizontalFlip}
+        - {type: ColorJitter}
+        - {type: Resize, size: [640, 640]}
+        - {type: ToTensor}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]} 
+      policy:
+        epoch: [5, 29, 42]   # list 
+        ops: ['PoseMosaic', 'RandomCrop', 'RandomZoomOut', 'MixUpCopyPaste']
+
+  collate_fn:
+    base_size: 640
+    base_size_repeat: 4
+    stop_epoch: 42
+  
+  total_batch_size: 32
+
+val_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ToTensor}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+  
+  collate_fn:
+    base_size: 640
+
+  total_batch_size: 32

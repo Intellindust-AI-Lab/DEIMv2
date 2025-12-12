@@ -1,0 +1,20 @@
+print_freq: 200
+output_dir: './logs'
+checkpoint_freq: 12
+
+
+sync_bn: True
+find_unused_parameters: True
+
+
+use_amp: False
+scaler:
+  type: GradScaler
+  enabled: False
+
+
+use_ema: False
+ema:
+  type: ModelEMA
+  decay: 0.9999
+  warmups: 1000

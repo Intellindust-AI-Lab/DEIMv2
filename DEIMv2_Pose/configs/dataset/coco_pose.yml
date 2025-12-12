@@ -1,0 +1,45 @@
+task: pose
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['keypoints', ]
+
+num_classes: 2
+remap_mscoco_category: True
+
+train_dataloader: 
+  type: DataLoader
+  dataset: 
+    type: CocoDetection
+    img_folder: /datassd/COCO/train2017/
+    ann_file: /datassd/COCO/annotations/person_keypoints_train2017.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: True
+  num_workers: 4
+  total_batch_size: 16
+  drop_last: True
+  pin_memory: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+
+val_dataloader:
+  type: DataLoader
+  dataset: 
+    type: CocoDetection
+    img_folder: /datassd/COCO/val2017/
+    ann_file: /datassd/COCO/annotations/person_keypoints_val2017.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~ 
+  shuffle: False
+  num_workers: 4
+  total_batch_size: 32
+  drop_last: False
+  pin_memory: True
+  collate_fn:
+    type: BatchImageCollateFunction
