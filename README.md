@@ -472,6 +472,12 @@ DEIMCriterion:
     ```shell
     trtexec --onnx="model.onnx" --saveEngine="model.engine" --fp16
     ```
+    
+Notes (TensorRT version)
+- It is recommended to use TensorRT 10.6 or later for FP16 inference to ensure stable detection and correct results.
+- Tested behavior: TensorRT 10.4 may fail to detect objects when running in FP16 mode.
+- If you must use an older TensorRT version (e.g., 10.4), consider running inference in FP32 mode or thoroughly validating the export/conversion pipeline.
+
 
 </details>
 
