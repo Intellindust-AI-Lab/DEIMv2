@@ -3,7 +3,7 @@
 </h2>
 <h3 align="center">
   We’re excited to introduce <a href="https://github.com/Intellindust-AI-Lab/EdgeCrafter">EdgeCrafter</a>
-<h3>
+</h3>
 
 <p align="center">
     <a href="https://github.com/Intellindust-AI-Lab/DEIMv2/blob/master/LICENSE">
