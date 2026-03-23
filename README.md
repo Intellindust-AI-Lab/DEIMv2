@@ -2,7 +2,7 @@
   Real-Time Object Detection Meets DINOv3
 </h2>
 <h3 align="center">
-  We’re excited to introduce <a href="https://github.com/Intellindust-AI-Lab/EdgeCrafter">EdgeCrafter</a>
+  We’re excited to introduce <a href="https://intellindust-ai-lab.github.io/projects/EdgeCrafter/">EdgeCrafter</a>
 </h3>
 
 <p align="center">
@@ -68,7 +68,7 @@
  
   
 ## 🚀 Updates
-- [x] **\[2026.3.20\]** 🔥🔥🔥Hi everyone! We’re excited to introduce [EdgeCrafter](https://github.com/Intellindust-AI-Lab/EdgeCrafter), our latest work that achieves new state-of-the-art performance—faster, more accurate, and easier to use than ever. It also supports multiple vision tasks, including object detection, instance segmentation, and human pose estimation!
+- [x] **\[2026.3.20\]** 🔥🔥🔥Hi everyone! **We’re excited to introduce [EdgeCrafter](https://intellindust-ai-lab.github.io/projects/EdgeCrafter/), our latest work that achieves new state-of-the-art performance—faster, more accurate, and easier to use than ever.** It also supports multiple vision tasks, including object detection, instance segmentation, and human pose estimation!
 - [x] **\[2026.1.7\]** STA, introduced in DEIMv2, has been integrated into the SOTA distillation library [LightlyTrain](https://github.com/lightly-ai/lightly-train/blob/1fbe09744891727b4b494583ee62f35e7b7b1668/src/lightly_train/_task_models/dinov3_ltdetr_object_detection/dinov3_vit_wrapper.py#L15), demonstrating its practical value and impact in real-world training pipelines. 
 - [x] **\[2026.1.7\]** FP16 Inference Fix: **Use TensorRT ≥ 10.6 to ensure stable execution and correct detection results.** For detailed deployment instructions, please refer to [Deployment](https://github.com/Intellindust-AI-Lab/DEIMv2?tab=readme-ov-file#4-tools).
 - [x] **\[2025.11.3\]** [We have uploaded our models to Hugging Face](https://huggingface.co/Intellindust)! Thanks to NielsRogge!
