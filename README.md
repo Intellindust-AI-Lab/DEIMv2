@@ -2,7 +2,8 @@
   Real-Time Object Detection Meets DINOv3
 </h2>
 <h3 align="center">
-  We’re excited to introduce <a href="https://intellindust-ai-lab.github.io/projects/EdgeCrafter/">EdgeCrafter</a>
+  
+  🎉 We’re excited to introduce <a href="https://intellindust-ai-lab.github.io/projects/EdgeCrafter/">EdgeCrafter</a> with SOTA performance on object detection, pose estimation as well as instance segmentation.🎉
 </h3>
 
 <p align="center">
