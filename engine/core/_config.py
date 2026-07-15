@@ -8,11 +8,10 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
-from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from pathlib import Path
-from typing import Callable, List, Dict
+from typing import Callable
 
 
 __all__ = ['BaseConfig', ]
@@ -35,7 +34,7 @@ class BaseConfig(object):
         self._train_dataloader :DataLoader = None
         self._val_dataloader :DataLoader = None
         self._ema :nn.Module = None
-        self._scaler :GradScaler = None
+        self._scaler :torch.amp.GradScaler = None
         self._train_dataset :Dataset = None
         self._val_dataset :Dataset = None
         self._collate_fn :Callable = None
@@ -179,13 +178,13 @@ class BaseConfig(object):
         self._ema = obj
 
     @property
-    def scaler(self) -> GradScaler:
+    def scaler(self) -> torch.amp.GradScaler:
         if self._scaler is None and self.use_amp and torch.cuda.is_available():
-            self._scaler = GradScaler()
+            self._scaler = torch.amp.GradScaler('cuda')
         return self._scaler
 
     @scaler.setter
-    def scaler(self, obj: GradScaler):
+    def scaler(self, obj: torch.amp.GradScaler):
         self._scaler = obj
 
     @property

@@ -1,0 +1,66 @@
+__include__: [
+  './deimv2_dinov3_x_coco.yml',
+]
+
+output_dir: /home/andrea/court-training-runs/deim-v2/x-grouped-768
+num_classes: 5
+eval_spatial_size: [768, 768]
+remap_mscoco_category: False
+print_freq: 100
+checkpoint_freq: 1
+
+epoches: 14
+warmup_iter: 100
+flat_epoch: 6
+no_aug_epoch: 3
+
+ema:
+  warmups: 100
+
+optimizer:
+  type: MuonAdamW
+
+train_dataloader:
+  dataset:
+    img_folder: /home/andrea/datasets/court-detection-basketball-current/train/images
+    ann_file: /home/andrea/datasets/court-detection-basketball-coco-clean/train-grouped.json
+    transforms:
+      ops:
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [768, 768]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy:
+        epoch: [2, 6, 11]
+      mosaic_prob: 0.0
+  total_batch_size: 4
+  num_workers: 4
+  collate_fn:
+    base_size: 768
+    mixup_prob: 0.0
+    mixup_epochs: [0, 0]
+    copyblend_prob: 0.0
+    copyblend_epochs: [0, 0]
+    stop_epoch: 11
+
+val_dataloader:
+  dataset:
+    img_folder: /home/andrea/datasets/court-detection-basketball-current/train/images
+    ann_file: /home/andrea/datasets/court-detection-basketball-coco-clean/validation-grouped.json
+    transforms:
+      ops:
+        - {type: Resize, size: [768, 768]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+  total_batch_size: 8
+  num_workers: 0
+
+DEIMCriterion:
+  matcher:
+    matcher_change_epoch: 11
