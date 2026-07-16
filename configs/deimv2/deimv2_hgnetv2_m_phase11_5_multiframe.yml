@@ -1,0 +1,88 @@
+__include__: [
+  '../dataset/phase11_5_multiframe_detection.yml',
+  '../runtime.yml',
+  '../base/dataloader.yml',
+  '../base/optimizer.yml',
+  '../base/deimv2.yml'
+]
+
+output_dir: ./outputs/deimv2_m_phase11_5_multiframe
+
+DEIM:
+  backbone: HGNetv2MultiFrame
+  encoder: HybridEncoder
+  decoder: DEIMTransformer
+
+HGNetv2MultiFrame:
+  name: 'B2'
+  input_channels: 4
+  return_idx: [1, 2, 3]
+  freeze_at: -1
+  freeze_norm: False
+  use_lab: True
+  pretrained: True
+  local_model_dir: ./weight/hgnetv2/
+
+HybridEncoder:
+  in_channels: [384, 768, 1536]
+  hidden_dim: 256
+  depth_mult: 0.67
+
+DEIMTransformer:
+  num_layers: 4
+  eval_idx: -1
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*bn).*$'
+      lr: 0.00004
+    -
+      params: '^(?=.*(?:norm|bn)).*$'
+      weight_decay: 0.
+  lr: 0.0004
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+epoches: 102
+flat_epoch: 49
+no_aug_epoch: 12
+
+train_dataloader:
+  total_batch_size: 2
+  dataset:
+    frame_offsets: [0.5]
+    transforms:
+      type: Compose
+      ops:
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy: null
+  collate_fn:
+    ema_restart_decay: 0.9999
+    base_size_repeat: 6
+    mixup_prob: 0.0
+    mixup_epochs: [4, 49]
+    stop_epoch: 90
+    copyblend_prob: 0.0
+    copyblend_epochs: [4, 90]
+
+val_dataloader:
+  total_batch_size: 4
+  dataset:
+    frame_offsets: [0.5]
+    transforms:
+      type: Compose
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy: null
+
+DEIMCriterion:
+  matcher:
+    change_matcher: True
+    iou_order_alpha: 4.0
+    matcher_change_epoch: 80
