@@ -45,7 +45,7 @@ def make_diff_channel(current_rgb, previous_rgb):
     if previous_rgb is None:
         return torch.zeros((1, current_rgb.shape[1], current_rgb.shape[2]), dtype=current_rgb.dtype)
 
-        cur_gray = current_rgb.mean(dim=0, keepdim=True)
+    cur_gray = current_rgb.mean(dim=0, keepdim=True)
     prev_gray = previous_rgb.mean(dim=0, keepdim=True)
     diff = ((cur_gray - prev_gray) + 1.0) * 0.5
     return diff.clamp(0.0, 1.0)
