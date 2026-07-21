@@ -1,2 +1,4 @@
 onnxruntime
 tensorrt
+opencv-python
+matplotlib

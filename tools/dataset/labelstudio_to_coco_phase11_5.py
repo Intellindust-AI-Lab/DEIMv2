@@ -11,8 +11,8 @@ from PIL import Image
 
 
 LABEL_MAP = {
-    "person": 1,
-    "head": 2,
+    "person": 0,
+    "head": 1,
 }
 
 
