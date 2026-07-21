@@ -3,6 +3,7 @@ Detection solver that adapts 3-channel checkpoints to multiframe input stems.
 """
 
 import copy
+from pathlib import Path
 
 import torch
 
@@ -38,11 +39,26 @@ def multiframe_stats(cfg):
 class MultiFrameDetSolver(DetSolver):
     def fit(self):
         original_stats = det_solver_module.stats
+        original_save_on_master = dist_utils.save_on_master
         det_solver_module.stats = multiframe_stats
+        if self.cfg.yaml_cfg.get("save_best_only", False):
+            dist_utils.save_on_master = self._save_best_only(original_save_on_master)
         try:
             return super().fit()
         finally:
             det_solver_module.stats = original_stats
+            dist_utils.save_on_master = original_save_on_master
+
+    @staticmethod
+    def _save_best_only(save_fn):
+        def wrapped_save_on_master(obj, path):
+            name = Path(path).name
+            if name.startswith("best_stg"):
+                return save_fn(obj, path)
+            print(f"Skip checkpoint save because save_best_only=True: {path}")
+            return None
+
+        return wrapped_save_on_master
 
     def _adapt_input_conv_state(self, current_state, pretrained_state):
         adjusted = dict(pretrained_state)

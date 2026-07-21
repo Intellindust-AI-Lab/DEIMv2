@@ -1,0 +1,26 @@
+__include__: [
+  './deimv2_hgnetv2_m_phase11_5_multiframe.yml'
+]
+
+output_dir: ./outputs/EX004_background_median_4ch_phase11_5
+save_best_only: True
+checkpoint_freq: 100000
+
+HGNetv2MultiFrame:
+  input_channels: 4
+
+train_dataloader:
+  dataset:
+    frame_offsets: [0.0]
+    diff_source: background_median
+    video_folder: /datadrive/data_phase11_5/videos/train
+    video_duration: 120.0
+    background_max_frames: 120
+
+val_dataloader:
+  dataset:
+    frame_offsets: [0.0]
+    diff_source: background_median
+    video_folder: /datadrive/data_phase11_5/videos/val
+    video_duration: 120.0
+    background_max_frames: 120

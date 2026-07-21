@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.utils.data
 import torchvision
@@ -73,13 +74,29 @@ class MultiFrameCocoDetection(CocoDetection):
         frame_tolerance=0.05,
         diff_mode="signed",
         missing_frame="zeros",
+        diff_source="previous",
+        video_folder=None,
+        video_duration=120.0,
+        background_max_frames=120,
     ):
         super().__init__(img_folder, ann_file, transforms, return_masks, remap_mscoco_category)
         self.frame_offsets = [float(v) for v in frame_offsets]
         self.frame_tolerance = float(frame_tolerance)
         self.diff_mode = diff_mode
         self.missing_frame = missing_frame
+        self.diff_source = diff_source
+        self.video_folder = video_folder or self._infer_video_folder(img_folder)
+        self.video_duration = float(video_duration)
+        self.background_max_frames = int(background_max_frames)
         self._frame_index = self._build_frame_index()
+        self._video_index = self._build_video_index()
+        self._background_groups = self._build_background_groups()
+        self._background_cache: Dict[Tuple[str, str], torch.Tensor] = {}
+
+    @staticmethod
+    def _infer_video_folder(img_folder):
+        img_path = Path(img_folder)
+        return str(img_path.parent / "videos" / img_path.name)
 
     def _build_frame_index(self) -> Dict[str, List[Tuple[float, str]]]:
         index: Dict[str, List[Tuple[float, str]]] = {}
@@ -94,6 +111,52 @@ class MultiFrameCocoDetection(CocoDetection):
         for frames in index.values():
             frames.sort(key=lambda item: item[0])
         return index
+
+    def _build_video_index(self) -> Dict[str, List[Tuple[float, float, str]]]:
+        index: Dict[str, List[Tuple[float, float, str]]] = {}
+        video_dir = Path(self.video_folder)
+        if not video_dir.exists():
+            return index
+
+        for path in sorted(video_dir.glob("*.mp4")):
+            parsed = _parse_frame_key(path.name)
+            if parsed is None:
+                continue
+            scene, start = parsed
+            index.setdefault(scene, []).append((start, start + self.video_duration, path.stem))
+
+        for videos in index.values():
+            videos.sort(key=lambda item: item[0])
+        return index
+
+    def _background_group_key(self, file_name: str) -> Optional[Tuple[str, str]]:
+        parsed = _parse_frame_key(file_name)
+        if parsed is None:
+            return None
+
+        scene, timestamp = parsed
+        for start, end, video_key in self._video_index.get(scene, []):
+            if start <= timestamp < end:
+                return scene, video_key
+
+        bucket = int(timestamp // self.video_duration)
+        return scene, f"{scene}_bucket_{bucket}"
+
+    def _build_background_groups(self) -> Dict[Tuple[str, str], List[str]]:
+        groups: Dict[Tuple[str, str], List[Tuple[float, str]]] = {}
+        for image_info in self.coco.dataset["images"]:
+            file_name = image_info["file_name"]
+            parsed = _parse_frame_key(file_name)
+            key = self._background_group_key(file_name)
+            if parsed is None or key is None:
+                continue
+            _, timestamp = parsed
+            groups.setdefault(key, []).append((timestamp, file_name))
+
+        return {
+            key: [file_name for _, file_name in sorted(items, key=lambda item: item[0])]
+            for key, items in groups.items()
+        }
 
     def _previous_file(self, file_name: str, offset: float) -> Optional[str]:
         parsed = _parse_frame_key(file_name)
@@ -120,6 +183,39 @@ class MultiFrameCocoDetection(CocoDetection):
             return best_file
         return None
 
+    def _sample_background_files(self, files: List[str]) -> List[str]:
+        if self.background_max_frames <= 0 or len(files) <= self.background_max_frames:
+            return files
+        indices = np.linspace(0, len(files) - 1, self.background_max_frames).round().astype(int)
+        return [files[i] for i in sorted(set(indices.tolist()))]
+
+    def _load_background_rgb(self, file_name: str, current_rgb: torch.Tensor) -> torch.Tensor:
+        key = self._background_group_key(file_name)
+        if key is None:
+            return current_rgb
+        if key in self._background_cache:
+            return self._background_cache[key]
+
+        files = self._sample_background_files(self._background_groups.get(key, []))
+        if not files:
+            self._background_cache[key] = current_rgb
+            return current_rgb
+
+        arrays = []
+        target_size = (current_rgb.shape[2], current_rgb.shape[1])
+        for bg_file in files:
+            path = os.path.join(self.img_folder, bg_file)
+            image = PILImage.open(path).convert("RGB")
+            if image.size != target_size:
+                image = image.resize(target_size, resample=PILImage.BILINEAR)
+            arrays.append(np.asarray(image, dtype=np.uint8))
+
+        median = np.median(np.stack(arrays, axis=0), axis=0).astype(np.uint8)
+        background = F.pil_to_tensor(PILImage.fromarray(median, mode="RGB")).float() / 255.0
+        self._background_cache[key] = background
+        print(f"Built median background for {key[1]} from {len(arrays)} frames.")
+        return background
+
     def _load_rgb_tensor(self, file_name: str, size=None) -> torch.Tensor:
         path = os.path.join(self.img_folder, file_name)
         image = PILImage.open(path).convert("RGB")
@@ -128,14 +224,17 @@ class MultiFrameCocoDetection(CocoDetection):
         return F.pil_to_tensor(image).float() / 255.0
 
     def _make_diff_channel(self, current_rgb: torch.Tensor, file_name: str, offset: float) -> torch.Tensor:
-        prev_file = self._previous_file(file_name, offset)
-        if prev_file is None:
-            if self.missing_frame == "current":
-                prev_rgb = current_rgb
-            else:
-                return torch.zeros((1, current_rgb.shape[1], current_rgb.shape[2]), dtype=current_rgb.dtype)
+        if self.diff_source == "background_median":
+            prev_rgb = self._load_background_rgb(file_name, current_rgb)
         else:
-            prev_rgb = self._load_rgb_tensor(prev_file, size=(current_rgb.shape[2], current_rgb.shape[1]))
+            prev_file = self._previous_file(file_name, offset)
+            if prev_file is None:
+                if self.missing_frame == "current":
+                    prev_rgb = current_rgb
+                else:
+                    return torch.zeros((1, current_rgb.shape[1], current_rgb.shape[2]), dtype=current_rgb.dtype)
+            else:
+                prev_rgb = self._load_rgb_tensor(prev_file, size=(current_rgb.shape[2], current_rgb.shape[1]))
 
         cur_gray = current_rgb.mean(dim=0, keepdim=True)
         prev_gray = prev_rgb.mean(dim=0, keepdim=True)
