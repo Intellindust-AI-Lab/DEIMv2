@@ -1,0 +1,28 @@
+__include__: [
+  './deimv2_hgnetv2_m_phase11_5_background_ex004.yml'
+]
+
+output_dir: ./outputs/EX006_combined_6ch_phase11_5
+save_best_only: True
+checkpoint_freq: 100000
+
+HGNetv2MultiFrame:
+  input_channels: 6
+
+train_dataloader:
+  dataset:
+    frame_offsets: [0.5, 1.0]
+    diff_source: previous_and_background_median
+    video_folder: /datadrive/data_phase11_5/videos/train
+    video_duration: 120.0
+    background_sample_interval: 2.0
+    background_max_frames: 0
+
+val_dataloader:
+  dataset:
+    frame_offsets: [0.5, 1.0]
+    diff_source: previous_and_background_median
+    video_folder: /datadrive/data_phase11_5/videos/val
+    video_duration: 120.0
+    background_sample_interval: 2.0
+    background_max_frames: 0
