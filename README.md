@@ -190,6 +190,258 @@ python3 tools/inference/torch_inf_video.py \
 
 ---
 
+## EX001 / EX002 / EX003 / EX004 / EX006 再現コマンド
 
+実装はGitHubの該当コミット・ブランチを参照してください。
+
+- GitHub: https://github.com/KotaIzawa/DEIMv2
+
+以下はリポジトリルートで実行します。
+
+```bash
+cd /home/kotaizawa/DEIMv2
+```
+
+### 共通パス
+
+```bash
+PHASE11_5_VIDEO_DIR=/home/kotaizawa/phase_11_5_test3
+PHASE11_5_FRAME_ALL=/datadrive/phase_11_5_test3/frames_05s_all/phase_11_5_test3_05s_frames
+PHASE11_5_FRAME_SAMPLE=/datadrive/phase_11_5_test3/labelstudio_annotation_500
+PHASE11_5_TEST_ANN=annotations/phase_11_5_test.json
+PHASE11_5_PERSON_EVAL_ANN=annotations/phase_11_5_test3_person_eval_coco.json
+LABELS_EX002=experiments/ex002/configs/dataset/phase11_5_labels.txt
+INIT_WEIGHT=checkpoints/best_stg2.pth
+```
+
+### 動画のフレーム処理
+
+0.5秒間隔で全フレームを切り出し、アノテーション用に500枚をサンプリングします。
+
+```bash
+python3 tools/dataset/extract_video_frames_for_annotation.py \
+  --input-dir "$PHASE11_5_VIDEO_DIR" \
+  --all-output-dir "$PHASE11_5_FRAME_ALL" \
+  --sample-output-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --interval 0.5 \
+  --duration 120 \
+  --sample-count 500 \
+  --quality 95
+```
+
+### 学習コマンド
+
+EX001: RGB + 0.5秒前との差分、4ch。
+
+```bash
+python3 train_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe.yml \
+  -t "$INIT_WEIGHT" \
+  --seed 0 \
+  --output-dir outputs/EX001_4ch_phase11_5_retry
+```
+
+EX002: RGB、3ch。
+
+```bash
+python3 train.py \
+  -c experiments/ex002/configs/deimv2/deimv2_hgnetv2_m_phase11_5_EX002.yml \
+  -t "$INIT_WEIGHT" \
+  --seed 0 \
+  --output-dir outputs/EX002_rgb_phase11_5
+```
+
+EX003: RGB + 0.5秒前/1.0秒前との差分、5ch。
+
+```bash
+python3 train_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe_ex003.yml \
+  -t "$INIT_WEIGHT" \
+  --seed 0 \
+  --output-dir outputs/EX003_5ch_phase11_5
+```
+
+EX004: RGB + median background差分、4ch。
+
+```bash
+python3 train_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_background_ex004.yml \
+  -t "$INIT_WEIGHT" \
+  --seed 0 \
+  --output-dir outputs/EX004_background_median_4ch_phase11_5
+```
+
+EX006: RGB + 0.5秒前/1.0秒前との差分 + median background差分、6ch。
+
+```bash
+python3 train_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_combined_ex006.yml \
+  -t "$INIT_WEIGHT" \
+  --seed 0 \
+  --output-dir outputs/EX006_combined_6ch_phase11_5
+```
+
+### 推論コマンド（定量評価）
+
+EX001。
+
+```bash
+python3 tools/eval_phase11_5_test3.py \
+  --name EX001_4ch_phase11_5_retry \
+  --mode ex001 \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe.yml \
+  -r outputs/EX001_4ch_phase11_5_retry/best_stg2.pth \
+  --src-annotation "$PHASE11_5_TEST_ANN" \
+  --annotation "$PHASE11_5_PERSON_EVAL_ANN" \
+  --image-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --all-frame-dir "$PHASE11_5_FRAME_ALL" \
+  --output-dir outputs/phase_11_5_test3_eval \
+  --conf-threshold 0.45 \
+  --iou-threshold 0.5
+```
+
+EX002。
+
+```bash
+python3 tools/eval_phase11_5_test3.py \
+  --name EX002_rgb_phase11_5 \
+  --mode rgb \
+  -c experiments/ex002/configs/deimv2/deimv2_hgnetv2_m_phase11_5_EX002.yml \
+  -r outputs/EX002_rgb_phase11_5/best_stg2.pth \
+  --src-annotation "$PHASE11_5_TEST_ANN" \
+  --annotation "$PHASE11_5_PERSON_EVAL_ANN" \
+  --image-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --all-frame-dir "$PHASE11_5_FRAME_ALL" \
+  --output-dir outputs/phase_11_5_test3_eval \
+  --conf-threshold 0.45 \
+  --iou-threshold 0.5
+```
+
+EX003。
+
+```bash
+python3 tools/eval_phase11_5_test3.py \
+  --name EX003_5ch_phase11_5 \
+  --mode ex003 \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe_ex003.yml \
+  -r outputs/EX003_5ch_phase11_5/best_stg2.pth \
+  --src-annotation "$PHASE11_5_TEST_ANN" \
+  --annotation "$PHASE11_5_PERSON_EVAL_ANN" \
+  --image-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --all-frame-dir "$PHASE11_5_FRAME_ALL" \
+  --output-dir outputs/phase_11_5_test3_eval \
+  --conf-threshold 0.45 \
+  --iou-threshold 0.5
+```
+
+EX004。
+
+```bash
+python3 tools/eval_phase11_5_test3.py \
+  --name EX004_background_median_4ch_phase11_5 \
+  --mode ex004 \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_background_ex004.yml \
+  -r outputs/EX004_background_median_4ch_phase11_5/best_stg2.pth \
+  --src-annotation "$PHASE11_5_TEST_ANN" \
+  --annotation "$PHASE11_5_PERSON_EVAL_ANN" \
+  --image-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --all-frame-dir "$PHASE11_5_FRAME_ALL" \
+  --output-dir outputs/phase_11_5_test3_eval \
+  --conf-threshold 0.45 \
+  --iou-threshold 0.5
+```
+
+EX006。
+
+```bash
+python3 tools/eval_phase11_5_test3.py \
+  --name EX006_combined_6ch_phase11_5 \
+  --mode ex006 \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_combined_ex006.yml \
+  -r outputs/EX006_combined_6ch_phase11_5/best_stg2.pth \
+  --src-annotation "$PHASE11_5_TEST_ANN" \
+  --annotation "$PHASE11_5_PERSON_EVAL_ANN" \
+  --image-dir "$PHASE11_5_FRAME_SAMPLE" \
+  --all-frame-dir "$PHASE11_5_FRAME_ALL" \
+  --output-dir outputs/phase_11_5_test3_eval \
+  --conf-threshold 0.45 \
+  --iou-threshold 0.5
+```
+
+### 定性評価（推論結果のBBoxを動画へ描画）
+
+EX001。
+
+```bash
+python3 tools/inference/torch_inf_video_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe.yml \
+  -r outputs/EX001_4ch_phase11_5_retry/best_stg2.pth \
+  -i "$PHASE11_5_VIDEO_DIR" \
+  -o outputs/inference_phase11_5_test_EX001_3 \
+  --threshold 0.45 \
+  --frame-offsets 0.5 \
+  --diff-source previous
+```
+
+EX002。
+
+```bash
+mkdir -p outputs/inference_phase11_5_test_EX002_rgb
+
+for video in "$PHASE11_5_VIDEO_DIR"/*.mp4
+do
+  base=$(basename "$video" .mp4)
+  python3 tools/inference/torch_inf_video.py \
+    -c experiments/ex002/configs/deimv2/deimv2_hgnetv2_m_phase11_5_EX002.yml \
+    -r outputs/EX002_rgb_phase11_5/best_stg2.pth \
+    -i "$video" \
+    -o "outputs/inference_phase11_5_test_EX002_rgb/${base}_thr0.45_rgb.mp4" \
+    -l "$LABELS_EX002" \
+    --threshold 0.45
+done
+```
+
+EX003。
+
+```bash
+python3 tools/inference/torch_inf_video_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_multiframe_ex003.yml \
+  -r outputs/EX003_5ch_phase11_5/best_stg2.pth \
+  -i "$PHASE11_5_VIDEO_DIR" \
+  -o outputs/inference_phase11_5_test_EX003_5ch_test3 \
+  --threshold 0.45 \
+  --frame-offsets 0.5 1.0 \
+  --diff-source previous
+```
+
+EX004。
+
+```bash
+python3 tools/inference/torch_inf_video_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_background_ex004.yml \
+  -r outputs/EX004_background_median_4ch_phase11_5/best_stg2.pth \
+  -i "$PHASE11_5_VIDEO_DIR" \
+  -o outputs/inference_phase_11_5_test3_EX004_bg_median_thr045 \
+  --threshold 0.45 \
+  --frame-offsets 0.5 \
+  --diff-source background_median \
+  --background-sample-interval 2.0 \
+  --background-max-frames 120
+```
+
+EX006。
+
+```bash
+python3 tools/inference/torch_inf_video_multiframe.py \
+  -c configs/deimv2/deimv2_hgnetv2_m_phase11_5_combined_ex006.yml \
+  -r outputs/EX006_combined_6ch_phase11_5/best_stg2.pth \
+  -i "$PHASE11_5_VIDEO_DIR" \
+  -o outputs/inference_phase_11_5_test3_EX006_combined_6ch_thr045 \
+  --threshold 0.45 \
+  --frame-offsets 0.5 1.0 \
+  --diff-source previous_and_background_median \
+  --background-sample-interval 2.0 \
+  --background-max-frames 120
+```
 
 

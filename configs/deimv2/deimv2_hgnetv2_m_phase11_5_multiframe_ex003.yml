@@ -1,0 +1,18 @@
+__include__: [
+  './deimv2_hgnetv2_m_phase11_5_multiframe.yml'
+]
+
+output_dir: ./outputs/EX003_5ch_phase11_5
+save_best_only: True
+checkpoint_freq: 100000
+
+HGNetv2MultiFrame:
+  input_channels: 5
+
+train_dataloader:
+  dataset:
+    frame_offsets: [0.5, 1.0]
+
+val_dataloader:
+  dataset:
+    frame_offsets: [0.5, 1.0]

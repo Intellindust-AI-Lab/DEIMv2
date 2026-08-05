@@ -1,0 +1,144 @@
+task: detection
+
+model: DEIM
+criterion: DEIMCriterion
+postprocessor: PostProcessor
+
+use_focal_loss: True
+eval_spatial_size: [640, 640] # h w
+checkpoint_freq: 5    # save freq
+
+DEIM:
+  backbone: HGNetv2
+  encoder: HybridEncoder
+  decoder: DEIMTransformer
+
+HGNetv2:
+  name: 'B4'
+  return_idx: [1, 2, 3]
+  freeze_at: -1         # 0 default
+  freeze_stem_only: True
+  freeze_norm: False    # True default
+  pretrained: True
+  local_model_dir: ./weight/hgnetv2/
+
+HybridEncoder:
+  in_channels: [512, 1024, 2048]
+  feat_strides: [8, 16, 32]
+
+  # intra
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  nhead: 8
+  dim_feedforward: 1024
+  dropout: 0.
+  enc_act: 'gelu'
+
+  # cross
+  expansion: 1.0
+  depth_mult: 1
+  act: 'silu'
+
+  # New
+  version: deim
+  csp_type: csp2
+  fuse_op: sum
+
+DEIMTransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  num_levels: 3
+
+  num_layers: 6
+  eval_idx: -1
+  num_queries: 300
+
+  num_denoising: 100
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+
+  reg_max: 32
+  reg_scale: 4
+  layer_scale: 1  # 2
+
+  num_points: [3, 6, 3] # [4, 4, 4] [3, 6, 3]
+  cross_attn_method: default # default, discrete
+  query_select_method: default # default, agnostic
+
+  # Act
+  activation: silu
+  mlp_act: silu
+
+  # FFN
+  dim_feedforward: 2048
+
+PostProcessor:
+  num_top_queries: 300
+
+
+## DEIM LR-Scheduler
+epoches: 58 # 72 + 2n  # Increase to search for the optimal ema
+
+lrsheduler: flatcosine
+lr_gamma: 0.5
+warmup_iter: 2000
+flat_epoch: 29    # 4 + epoch // 2, e.g., 40 = 4 + 72 / 2
+no_aug_epoch: 8
+
+## Dense O2O: Mosaic + Mixup + CopyBlend
+train_dataloader: 
+  dataset: 
+    transforms:
+      ops:
+        - {type: Mosaic, output_size: 320, rotation_range: 10, translation_range: [0.1, 0.1], scaling_range: [0.5, 1.5],
+           probability: 1.0, fill_value: 0, use_cache: True, max_cached_images: 50, random_pop: True}
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640], }
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      # Mosaic options
+      policy:
+        epoch: [4, 29, 50]   # list 
+        ops: ['Mosaic', 'RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
+      mosaic_prob: 0.5
+
+  collate_fn:
+    # Mixup options
+    mixup_prob: 0.5
+    mixup_epochs: [4, 29]
+    stop_epoch: 50    # epoch in [72, ~) stop `multiscales`
+    # CopyBlend options
+    copyblend_prob: 0.5
+    copyblend_epochs: [4, 50]
+    area_threshold: 100
+    num_objects: 3
+    with_expand: True
+    expand_ratios: [0.1, 0.25]
+
+    ema_restart_decay: 0.9999
+    base_size_repeat: 4
+
+## DEIM Loss
+DEIMCriterion:
+  weight_dict: {loss_mal: 1, loss_bbox: 5, loss_giou: 2, loss_fgl: 0.15, loss_ddf: 1.5}
+  losses: ['mal', 'boxes', 'local']
+  gamma: 1.5
+  alpha: 0.75
+  reg_max: 32
+
+  matcher:
+    type: HungarianMatcher
+    weight_dict: {cost_class: 2, cost_bbox: 5, cost_giou: 2}
+    alpha: 0.25
+    gamma: 2.0
+    # change matcher
+    change_matcher: True
+    iou_order_alpha: 4.0
+    matcher_change_epoch: 45
