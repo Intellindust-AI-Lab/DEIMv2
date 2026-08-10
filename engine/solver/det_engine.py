@@ -36,6 +36,9 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
     ema :ModelEMA = kwargs.get('ema', None)
     scaler :GradScaler = kwargs.get('scaler', None)
     lr_warmup_scheduler :Warmup = kwargs.get('lr_warmup_scheduler', None)
+    # bfloat16 has the same dynamic range as float32, avoiding activation overflows that
+    # float16 can hit with ViT backbones (e.g. DINOv2 high-norm tokens).
+    amp_dtype = torch.bfloat16 if kwargs.get('amp_dtype', 'float16') == 'bfloat16' else torch.float16
 
     cur_iters = epoch * len(data_loader)
 
@@ -46,7 +49,7 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
         metas = dict(epoch=epoch, step=i, global_step=global_step, epoch_step=len(data_loader))
 
         if scaler is not None:
-            with torch.autocast(device_type=str(device), cache_enabled=True):
+            with torch.autocast(device_type=str(device), dtype=amp_dtype, cache_enabled=True):
                 outputs = model(samples, targets=targets)
 
             if torch.isnan(outputs['pred_boxes']).any() or torch.isinf(outputs['pred_boxes']).any():

@@ -29,7 +29,8 @@ class CocoDetection(torchvision.datasets.CocoDetection, DetDataset):
     __inject__ = ['transforms', ]
     __share__ = ['remap_mscoco_category']
 
-    def __init__(self, img_folder, ann_file, transforms, return_masks=False, remap_mscoco_category=False):
+    def __init__(self, img_folder, ann_file, transforms, return_masks=False, remap_mscoco_category=False,
+                 remove_empty_annotations=False):
         super(CocoDetection, self).__init__(img_folder, ann_file)
         self._transforms = transforms
         self.prepare = ConvertCocoPolysToMask(return_masks)
@@ -37,6 +38,15 @@ class CocoDetection(torchvision.datasets.CocoDetection, DetDataset):
         self.ann_file = ann_file
         self.return_masks = return_masks
         self.remap_mscoco_category = remap_mscoco_category
+        if remove_empty_annotations:
+            self._remove_empty_annotations()
+
+    def _remove_empty_annotations(self) -> None:
+        """Drop images that have no annotations (background-only images)."""
+        num_total = len(self.ids)
+        self.ids = [img_id for img_id in self.ids if len(self.coco.getAnnIds(imgIds=img_id)) > 0]
+        print(f'CocoDetection: kept {len(self.ids)}/{num_total} images with annotations '
+              f'(removed {num_total - len(self.ids)} background-only images)')
 
     def __getitem__(self, idx):
         img, target = self.load_item(idx)

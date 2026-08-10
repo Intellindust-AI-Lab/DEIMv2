@@ -187,12 +187,18 @@ def reduce_dict(data, avg=True):
         return data
 
     with torch.no_grad():
-        keys, values = [], []
-        for k in sorted(data.keys()):
-            keys.append(k)
-            values.append(data[k])
+        # Ranks may produce different key sets (e.g. the data-dependent `loss_ddf`, or
+        # missing `_dn` losses when a batch has no boxes). Reduce over the union of keys,
+        # zero-padding the missing ones, so every rank issues an all_reduce of the same
+        # size -- otherwise NCCL pairs collectives incorrectly and training deadlocks.
+        local_keys = sorted(data.keys())
+        gathered_keys = [None] * world_size
+        torch.distributed.all_gather_object(gathered_keys, local_keys)
+        keys = sorted({k for rank_keys in gathered_keys for k in rank_keys})
 
-        values = torch.stack(values, dim=0)
+        device = next(iter(data.values())).device
+        zero = torch.zeros((), device=device)
+        values = torch.stack([torch.as_tensor(data[k], device=device) if k in data else zero for k in keys])
         torch.distributed.all_reduce(values)
 
         if avg is True:
@@ -215,6 +221,33 @@ def all_gather(data):
     data_list = [None] * world_size
     torch.distributed.all_gather_object(data_list, data)
     return data_list
+
+
+def gather(data, dst: int = 0):
+    """Gather arbitrary picklable data from all ranks onto rank ``dst`` only.
+
+    Unlike :func:`all_gather`, only the destination rank holds the gathered copies,
+    which keeps peak host memory low when the payload is large (e.g. COCO eval results).
+
+    :param data: Any picklable object.
+    :param dst: Destination rank.
+    :return: List with one entry per rank on ``dst``; ``None`` on all other ranks.
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+    output = [None] * world_size if get_rank() == dst else None
+    torch.distributed.gather_object(data, output, dst=dst)
+    return output
+
+
+def broadcast_object(obj, src: int = 0):
+    """Broadcast one picklable object from rank ``src`` to all ranks and return it."""
+    if get_world_size() == 1:
+        return obj
+    payload = [obj]
+    torch.distributed.broadcast_object_list(payload, src=src)
+    return payload[0]
 
 
 def sync_time():

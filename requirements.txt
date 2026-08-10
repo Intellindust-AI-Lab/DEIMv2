@@ -3,6 +3,7 @@ torchvision==0.20.1
 faster-coco-eval>=1.6.7
 PyYAML
 tensorboard
+clearml
 scipy
 calflops
 transformers

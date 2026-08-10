@@ -1,0 +1,41 @@
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+
+# 0: product, 1: cellphone, 2: wallet, 3: credit_card, 4: other_item, 5: inseparable, 6: bag
+num_classes: 7
+remap_mscoco_category: False
+
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/rbezen/Projects/datasets/product_detection/
+    ann_file: /home/rbezen/Projects/datasets/product_detection/annotations/train.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/rbezen/Projects/datasets/product_detection/
+    ann_file: /home/rbezen/Projects/datasets/product_detection/annotations/val.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction

@@ -1,0 +1,47 @@
+__include__: [
+  '../dataset/product_detection.yml',
+  '../runtime.yml',
+  '../base/dataloader.yml',
+  '../base/optimizer.yml',
+  '../base/deimv2.yml'
+]
+
+output_dir: ./outputs/deimv2_hgnetv2_l_product
+
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.000025
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$'
+      weight_decay: 0.
+
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+# ~2.9x more train images than COCO, so fewer epochs than the 58 used for COCO
+epoches: 24 # 20 + 4
+
+## LR-Scheduler
+flat_epoch: 14    # 4 + data_epochs // 2
+no_aug_epoch: 4
+
+## DataAug schedule
+train_dataloader:
+  dataset:
+    transforms:
+      policy:
+        epoch: [2, 14, 20]   # list
+
+  collate_fn:
+    mixup_epochs: [2, 14]
+    stop_epoch: 20
+    copyblend_epochs: [2, 20]
+
+DEIMCriterion:
+  matcher:
+    matcher_change_epoch: 18

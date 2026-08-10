@@ -60,22 +60,32 @@ class CocoEvaluator(object):
             self.eval_imgs[iou_type].append(np.array(coco_eval._evalImgs_cpp).reshape(len(coco_eval.params.catIds), len(coco_eval.params.areaRng), len(coco_eval.params.imgIds)))
 
     def synchronize_between_processes(self):
+        # Merge results on the main process only: with large validation sets, holding a
+        # full merged copy (plus pickle intermediates) on every rank can OOM the host.
         for iou_type in self.iou_types:
             img_ids, eval_imgs = merge(self.img_ids, self.eval_imgs[iou_type])
 
-            coco_eval = self.coco_eval[iou_type]
-            coco_eval.params.imgIds = img_ids
-            coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
-            coco_eval._evalImgs_cpp = eval_imgs
+            if dist_utils.is_main_process():
+                coco_eval = self.coco_eval[iou_type]
+                coco_eval.params.imgIds = img_ids
+                coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
+                coco_eval._evalImgs_cpp = eval_imgs
 
     def accumulate(self):
-        for coco_eval in self.coco_eval.values():
-            coco_eval.accumulate()
+        if dist_utils.is_main_process():
+            for coco_eval in self.coco_eval.values():
+                coco_eval.accumulate()
 
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
-            print("IoU metric: {}".format(iou_type))
-            coco_eval.summarize()
+            if dist_utils.is_main_process():
+                print("IoU metric: {}".format(iou_type))
+                coco_eval.summarize()
+            # Broadcast the stats so every rank sees identical metrics: the solver takes
+            # control-flow decisions (best checkpoint, EMA refresh) based on them.
+            coco_eval.stats = dist_utils.broadcast_object(
+                coco_eval.stats if dist_utils.is_main_process() else None
+            )
 
     def prepare(self, predictions, iou_type):
         if iou_type == "bbox":
@@ -178,8 +188,14 @@ def convert_to_xywh(boxes):
     return torch.stack((xmin, ymin, xmax - xmin, ymax - ymin), dim=1)
 
 def merge(img_ids, eval_imgs):
-    all_img_ids = dist_utils.all_gather(img_ids)
-    all_eval_imgs = dist_utils.all_gather(eval_imgs)
+    """Gather per-rank eval results onto the main process and merge them there.
+
+    Returns ``([], [])`` on non-main ranks.
+    """
+    all_img_ids = dist_utils.gather(img_ids)
+    all_eval_imgs = dist_utils.gather(eval_imgs)
+    if not dist_utils.is_main_process():
+        return [], []
 
     merged_img_ids = []
     for p in all_img_ids:

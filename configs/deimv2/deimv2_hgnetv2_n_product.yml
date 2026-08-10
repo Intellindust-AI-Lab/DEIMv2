@@ -1,0 +1,96 @@
+__include__: [
+  '../dataset/product_detection.yml',
+  '../runtime.yml',
+  '../base/dataloader.yml',
+  '../base/optimizer.yml',
+  '../base/deimv2.yml'
+]
+
+output_dir: ./outputs/deimv2_hgnetv2_n_product
+
+HGNetv2:
+  name: 'B0'
+  return_idx: [2, 3]
+  freeze_at: -1
+  freeze_norm: False
+  use_lab: True
+
+HybridEncoder:
+  in_channels: [512, 1024]
+  feat_strides: [16, 32]
+
+  # intra
+  hidden_dim: 128
+  use_encoder_idx: [1]
+  dim_feedforward: 512
+
+  # cross
+  expansion: 0.34
+  depth_mult: 0.5
+
+  version: 'dfine'
+
+DEIMTransformer:
+  feat_channels: [128, 128]
+  feat_strides: [16, 32]
+  hidden_dim: 128
+  num_levels: 2
+  num_points: [6, 6]
+
+  num_layers: 3
+  eval_idx: -1
+
+  # FFN
+  dim_feedforward: 512
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.0004
+    -
+      params: '^(?=.*backbone)(?=.*norm|bn).*$'
+      lr: 0.0004
+      weight_decay: 0.
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0008
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+# ~3.5x more train images than COCO, so fewer epochs than the 160 used for COCO
+epoches: 48 # 36 + 12
+
+## Our LR-Scheduler
+flat_epoch: 7800
+no_aug_epoch: 12
+lr_gamma: 1.0
+
+## Our DataAug
+train_dataloader:
+  dataset:
+    transforms:
+      policy:
+        epoch: [2, 18, 36]   # list
+
+  collate_fn:
+    ema_restart_decay: 0.9999
+    base_size_repeat: ~
+    mixup_epochs: [2, 18]
+    stop_epoch: 36
+    copyblend_prob: 0.4
+    copyblend_epochs: [2, 18]   # CP half
+    area_threshold: 100
+    num_objects: 3
+    with_expand: True
+    expand_ratios: [0.1, 0.25]
+
+DEIMCriterion:
+  matcher:
+    # new matcher
+    change_matcher: True
+    iou_order_alpha: 4.0
+    matcher_change_epoch: 32

@@ -1,0 +1,122 @@
+__include__: [
+  '../dataset/product_detection.yml',
+  '../runtime.yml',
+  '../base/dataloader.yml',
+  '../base/optimizer.yml',
+  '../base/deimv2.yml',
+]
+
+output_dir: ./outputs/deimv2_dinov2_b_product
+
+# bfloat16 AMP: float16 overflows on DINOv2's high-norm activations after enough
+# fine-tuning, corrupting the weights with NaNs.
+amp_dtype: bfloat16
+
+# DINOv2 ViT-B/14 backbone (Apache 2.0): larger than the ViT-S variant in
+# deimv2_dinov2_product.yml; encoder/decoder widths follow the DEIMv2-X recipe.
+DEIM:
+  backbone: DINOv3STAs
+
+DINOv3STAs:
+  name: dinov2_vitb14_reg
+  weights_path: ./ckpts/dinov2_vitb14_reg4_pretrain.pth
+  patch_size: 14
+  interaction_indexes: [5, 8, 11]   # only need the [1/8, 1/16, 1/32]
+  finetune: True
+  conv_inplane: 64
+  hidden_dim: 256
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  hidden_dim: 256
+  dim_feedforward: 1024
+  expansion: 1.25
+  depth_mult: 1.37
+
+DEIMTransformer:
+  feat_channels: [256, 256, 256]
+  hidden_dim: 256
+  num_layers: 6
+  eval_idx: -1
+  dim_feedforward: 2048
+
+# ~3.5x more train images than COCO, so fewer epochs than the 160 used for COCO
+epoches: 48 # 36 + 12
+
+## Our LR-Scheduler
+lrsheduler: flatcosine
+flat_epoch: 7800
+no_aug_epoch: 12
+lr_gamma: 1.0
+warmup_iter: 2000
+
+## Optimizer: small LR for the pretrained ViT, larger LR for adapter/encoder/decoder
+optimizer:
+  type: AdamW
+  params:
+    -
+      # except norm/bn/bias in self.dinov3 (the ViT module)
+      params: '^(?=.*.dinov3)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.00001
+    -
+      # including norm/bn/bias in self.dinov3
+      params: '^(?=.*.dinov3)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.00001
+      weight_decay: 0.
+    -
+      # including norm/bn/bias except for the self.dinov3
+      params: '^(?=.*(?:sta|encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+## Dense O2O: Mosaic + Mixup + CopyBlend, with ImageNet normalization for DINOv2
+train_dataloader:
+  total_batch_size: 40   # 5 GPUs x 8
+  dataset:
+    transforms:
+      ops:
+        - {type: Mosaic, output_size: 320, rotation_range: 10, translation_range: [0.1, 0.1], scaling_range: [0.5, 1.5],
+           probability: 1.0, fill_value: 0, use_cache: True, max_cached_images: 50, random_pop: True}
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640], }
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy:
+        epoch: [2, 18, 36]   # list
+
+  collate_fn:
+    ema_restart_decay: 0.9999
+    base_size_repeat: ~
+    mixup_epochs: [2, 18]
+    stop_epoch: 36
+    copyblend_prob: 0.4
+    copyblend_epochs: [2, 18]   # CP half
+    area_threshold: 100
+    num_objects: 3
+    with_expand: True
+    expand_ratios: [0.1, 0.25]
+
+val_dataloader:
+  total_batch_size: 40
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [640, 640], }
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+
+DEIMCriterion:
+  matcher:
+    # new matcher
+    change_matcher: True
+    iou_order_alpha: 4.0
+    matcher_change_epoch: 32

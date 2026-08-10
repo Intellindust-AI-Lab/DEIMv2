@@ -18,6 +18,12 @@ from ._solver import BaseSolver
 from .det_engine import train_one_epoch, evaluate
 from ..optim.lr_scheduler import FlatCosineLRScheduler
 
+#: Names of the 12 entries of ``COCOeval.stats``, in their fixed order.
+COCO_EVAL_STAT_NAMES = (
+    'AP_50-95', 'AP_50', 'AP_75', 'AP_small', 'AP_medium', 'AP_large',
+    'AR_max1', 'AR_max10', 'AR_max100', 'AR_small', 'AR_medium', 'AR_large',
+)
+
 
 class DetSolver(BaseSolver):
 
@@ -96,7 +102,8 @@ class DetSolver(BaseSolver):
                 ema=self.ema, 
                 scaler=self.scaler, 
                 lr_warmup_scheduler=self.lr_warmup_scheduler,
-                writer=self.writer
+                writer=self.writer,
+                amp_dtype=self.cfg.yaml_cfg.get('amp_dtype', 'float16'),
             )
 
             if not self.self_lr_scheduler:  # update by epoch 
@@ -126,7 +133,8 @@ class DetSolver(BaseSolver):
             for k in test_stats:
                 if self.writer and dist_utils.is_main_process():
                     for i, v in enumerate(test_stats[k]):
-                        self.writer.add_scalar(f'Test/{k}_{i}'.format(k), v, epoch)
+                        name = COCO_EVAL_STAT_NAMES[i] if i < len(COCO_EVAL_STAT_NAMES) else str(i)
+                        self.writer.add_scalar(f'Test/{k}/{name}', v, epoch)
 
                 if k in best_stat:
                     best_stat['epoch'] = epoch if test_stats[k][0] > best_stat[k] else best_stat['epoch']

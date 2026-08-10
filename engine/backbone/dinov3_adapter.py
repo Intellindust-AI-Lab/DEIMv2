@@ -20,6 +20,7 @@ import torch.utils.checkpoint as cp
 from functools import partial
 from ..core import register
 from .vit_tiny import VisionTransformer
+from .dinov2 import DinoV2VisionTransformer
 from .dinov3 import DinoVisionTransformer
 
 
@@ -92,6 +93,13 @@ class DINOv3STAs(nn.Module):
                 self.dinov3.load_state_dict(torch.load(weights_path))
             else:
                 print('Training DINOv3 from scratch...')
+        elif 'dinov2' in name:
+            self.dinov3 = DinoV2VisionTransformer(name=name)
+            if weights_path is not None and os.path.exists(weights_path):
+                print(f'Loading ckpt from {weights_path}...')
+                self.dinov3.load_state_dict(torch.load(weights_path, map_location='cpu', weights_only=True))
+            else:
+                print('Training DINOv2 from scratch...')
         else:
             self.dinov3 =  VisionTransformer(embed_dim=embed_dim, num_heads=num_heads, return_layers=interaction_indexes)
             if weights_path is not None and os.path.exists(weights_path):
@@ -102,7 +110,7 @@ class DINOv3STAs(nn.Module):
 
         embed_dim = self.dinov3.embed_dim
         self.interaction_indexes = interaction_indexes
-        self.patch_size = patch_size
+        self.patch_size = getattr(self.dinov3, 'patch_size', patch_size)
 
         if not finetune:
             self.dinov3.eval()
@@ -133,15 +141,22 @@ class DINOv3STAs(nn.Module):
     def forward(self, x):
         # Code for matching with oss
         H_c, W_c = x.shape[2] // 16, x.shape[3] // 16
-        H_toks, W_toks = x.shape[2] // self.patch_size, x.shape[3] // self.patch_size
         bs, C, h, w = x.shape
+
+        vit_x = x
+        if self.patch_size != 16:
+            # Rescale the ViT input so its token grid matches the stride-16 grid of the feature pyramid
+            # (e.g. DINOv2 uses patch size 14, so a 640px image becomes 560px -> 40x40 tokens).
+            vit_x = F.interpolate(
+                x, size=(H_c * self.patch_size, W_c * self.patch_size), mode='bilinear', align_corners=False
+            )
 
         if len(self.interaction_indexes) > 0 and not isinstance(self.dinov3, VisionTransformer):
             all_layers = self.dinov3.get_intermediate_layers(
-                x, n=self.interaction_indexes, return_class_token=True
+                vit_x, n=self.interaction_indexes, return_class_token=True
             )
         else:
-            all_layers = self.dinov3(x)
+            all_layers = self.dinov3(vit_x)
 
         if len(all_layers) == 1:    # repeat the same layer for all the three scales
             all_layers = [all_layers[0], all_layers[0], all_layers[0]]

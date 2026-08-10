@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import argparse
+from pathlib import Path
 
 from engine.misc import dist_utils
 from engine.core import YAMLConfig, yaml_utils
@@ -28,9 +29,36 @@ if debug:
     original_repr = torch.Tensor.__repr__
     torch.Tensor.__repr__ = custom_repr
 
+def init_clearml(args: argparse.Namespace) -> None:
+    """Create a ClearML task on the main process.
+
+    ClearML auto-instruments the TensorBoard ``SummaryWriter``, so all scalars logged during
+    training are mirrored to the ClearML server without further code changes. Checkpoint
+    auto-upload is disabled because the solver saves ``last.pth`` every epoch.
+
+    :param args: Parsed command-line arguments; uses ``clearml_project``, ``clearml_task``
+        and ``config``.
+    """
+    if int(os.environ.get('RANK', 0)) != 0:
+        return
+
+    from clearml import Task
+
+    task = Task.init(
+        project_name=args.clearml_project,
+        task_name=args.clearml_task or Path(args.config).stem,
+        auto_connect_frameworks={'pytorch': False},
+        output_uri=False,
+    )
+    task.connect_configuration(args.config, name='yaml_config')
+
+
 def main(args, ) -> None:
     """main
     """
+    if not args.avoid_clearml:
+        init_clearml(args)
+
     dist_utils.setup_distributed(args.print_rank, args.print_method, seed=args.seed)
 
     assert not all([args.tuning, args.resume]), \
@@ -39,7 +67,7 @@ def main(args, ) -> None:
 
     update_dict = yaml_utils.parse_cli(args.update)
     update_dict.update({k: v for k, v in args.__dict__.items() \
-        if k not in ['update', ] and v is not None})
+        if k not in ['update', 'avoid_clearml', 'clearml_project', 'clearml_task'] and v is not None})
 
     cfg = YAMLConfig(args.config, **update_dict)
 
@@ -73,6 +101,11 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', type=str, help='output directoy')
     parser.add_argument('--summary-dir', type=str, help='tensorboard summry')
     parser.add_argument('--test-only', action='store_true', default=False,)
+
+    # experiment tracking (ClearML is on by default)
+    parser.add_argument('--avoid-clearml', action='store_true', default=False, help='do not log the run to ClearML')
+    parser.add_argument('--clearml-project', type=str, default='DEIMv2', help='ClearML project name')
+    parser.add_argument('--clearml-task', type=str, help='ClearML task name (defaults to config file name)')
 
     # priority 1
     parser.add_argument('-u', '--update', nargs='+', help='update yaml config')

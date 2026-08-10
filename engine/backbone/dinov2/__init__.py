@@ -1,0 +1,1 @@
+from .vision_transformer import DinoV2VisionTransformer

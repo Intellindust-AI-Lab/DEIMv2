@@ -11,8 +11,8 @@ train_dataloader:
   type: DataLoader
   dataset: 
     type: CocoDetection
-    img_folder: /datassd/COCO/train2017/
-    ann_file: /datassd/COCO/annotations/instances_train2017.json
+    img_folder: ../datasets/coco/train2017/
+    ann_file: ../datasets/coco/annotations/instances_train2017.json
     return_masks: False
     transforms:
       type: Compose
@@ -28,8 +28,8 @@ val_dataloader:
   type: DataLoader
   dataset: 
     type: CocoDetection
-    img_folder: /datassd/COCO/val2017/
-    ann_file: /datassd/COCO/annotations/instances_val2017.json
+    img_folder: ../datasets/coco/val2017/
+    ann_file: ../datasets/coco/annotations/instances_val2017.json
     return_masks: False
     transforms:
       type: Compose

@@ -1,0 +1,34 @@
+[project]
+name = "deimv2"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "rbezen", email = "rbezen@trigoretail.com" }
+]
+dependencies = [
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "faster-coco-eval>=1.6.7",
+    "pyyaml>=6.0.3",
+    "tensorboard>=2.21.0",
+    "scipy>=1.18.0",
+    "calflops>=0.3.2",
+    "transformers>=5.14.1",
+    "clearml>=2.1.10",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deimv2"]
