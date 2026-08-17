@@ -162,6 +162,24 @@ conda activate deimv2
 pip install -r requirements.txt
 ```
 
+### 2.1.1 Intel XPU
+
+Install an XPU-enabled PyTorch build before the remaining project dependencies. Do not install the CUDA-pinned `torch` and `torchvision` entries from `requirements.txt` into this environment.
+
+```shell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+pip install faster-coco-eval PyYAML tensorboard scipy calflops transformers
+```
+
+Use `-d xpu` for single-device training and PyTorch inference:
+
+```shell
+python train.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -d xpu --use-amp
+python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -r model.pth -i image.jpg -d xpu
+```
+
+For multiple XPUs, use `torchrun` (DDP), not `DataParallel`; XPU DDP also requires an XPU-capable distributed backend in the installed PyTorch build. TensorRT tools and ONNX Runtime GPU inference are CUDA-only. ONNX export runs on CPU and can be used with external OpenVINO tooling for Intel deployment.
+
 
 ### 2.2 Data Preparation
 
@@ -481,6 +499,8 @@ DEIMCriterion:
     trtexec --onnx="model.onnx" --saveEngine="model.engine" --fp16
     ```
 
+    TensorRT export and `.engine` inference require NVIDIA CUDA; they do not support Intel XPU.
+
 ⚠️ **TensorRT Version Notes**
 
 - ✅ Recommended: **Use TensorRT ≥ 10.6 for FP16 inference** to ensure stable execution and correct detection results.
@@ -514,7 +534,10 @@ DEIMCriterion:
     python tools/inference/onnx_inf.py --onnx model.onnx --input image.jpg  # video.mp4
     python tools/inference/trt_inf.py --trt model.engine --input image.jpg
     python tools/inference/torch_inf.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth --input image.jpg --device cuda:0
+    python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -r model.pth --input image.jpg --device xpu
     ```
+
+    `trt_inf.py` and `trt_benchmark.py` are NVIDIA TensorRT/CUDA-only. `onnx_inf.py` supports ONNX Runtime CPU/CUDA providers, not XPU.
 </details>
 
 <details>

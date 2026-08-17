@@ -74,7 +74,7 @@ def draw(image, labels, boxes, scores, thrh=0.45):
     return image
 
 
-def process_dataset(model, dataset_path, output_path, thrh=0.5, size=(640, 640), vit_backbone=False):
+def process_dataset(model, device, dataset_path, output_path, thrh=0.5, size=(640, 640), vit_backbone=False):
     os.makedirs(output_path, exist_ok=True)
     image_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith(('.jpg', '.png'))]
 
@@ -89,10 +89,10 @@ def process_dataset(model, dataset_path, output_path, thrh=0.5, size=(640, 640),
     for idx, file_path in enumerate(image_paths):
         im_pil = Image.open(file_path).convert('RGB')
         w, h = im_pil.size
-        orig_size = torch.tensor([[w, h]]).cuda()
+        orig_size = torch.tensor([[w, h]]).to(device)
 
         # 图像预处理
-        im_data = transforms(im_pil).unsqueeze(0).cuda()
+        im_data = transforms(im_pil).unsqueeze(0).to(device)
         output = model(im_data, orig_size)
         labels, boxes, scores = output[0]['labels'], output[0]['boxes'], output[0]['scores']
 
@@ -129,8 +129,8 @@ def main(args):
     class Model(nn.Module):
         def __init__(self):
             super().__init__()
-            self.model = cfg.model.eval().cuda()
-            self.postprocessor = cfg.postprocessor.eval().cuda()
+            self.model = cfg.model.eval().to(args.device)
+            self.postprocessor = cfg.postprocessor.eval().to(args.device)
 
         def forward(self, images, orig_target_sizes):
             outputs = self.model(images)
@@ -141,7 +141,7 @@ def main(args):
     img_size = cfg.yaml_cfg["eval_spatial_size"]
     vit_backbone = cfg.yaml_cfg.get('DINOv3STAs', False)
 
-    process_dataset(model, args.dataset, args.output, thrh=0.45, size=img_size, vit_backbone=vit_backbone)
+    process_dataset(model, args.device, args.dataset, args.output, thrh=0.45, size=img_size, vit_backbone=vit_backbone)
 
 
 if __name__ == '__main__':
@@ -151,5 +151,6 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--resume', type=str, required=True)
     parser.add_argument('-d', '--dataset', type=str, default='./data/fiftyone/validation/data')
     parser.add_argument('-o', '--output', type=str, required=True, help="Path to save visualized results")
+    parser.add_argument('--device', type=str, default='cuda', help='device (cpu, cuda, xpu)')
     args = parser.parse_args()
     main(args)

@@ -64,10 +64,11 @@ label_map = {
 }
 
 class CustomModel(fom.Model):
-    def __init__(self, cfg):
+    def __init__(self, cfg, device='cpu'):
         super().__init__()
-        self.model = cfg.model.eval().cuda()
-        self.postprocessor = cfg.postprocessor.eval().cuda()
+        self.device = device
+        self.model = cfg.model.eval().to(device)
+        self.postprocessor = cfg.postprocessor.eval().to(device)
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize((640, 640)),  # Resize to the size expected by your model
@@ -123,9 +124,9 @@ class CustomModel(fom.Model):
 
     def predict(self, image):
         image = Image.fromarray(image).convert('RGB')
-        image_tensor = self.transform(image).unsqueeze(0).cuda()
+        image_tensor = self.transform(image).unsqueeze(0).to(self.device)
         outputs = self.model(image_tensor)
-        orig_target_sizes = torch.tensor([[640, 640]]).cuda()
+        orig_target_sizes = torch.tensor([[640, 640]]).to(self.device)
         predictions = self.postprocessor(outputs, orig_target_sizes)
         return self._convert_predictions(predictions)
 
@@ -135,9 +136,9 @@ class CustomModel(fom.Model):
             image = Image.fromarray(image)
             image_tensor = self.transform(image)
             image_tensors.append(image_tensor)
-        image_tensors = torch.stack(image_tensors).cuda()
+        image_tensors = torch.stack(image_tensors).to(self.device)
         outputs = self.model(image_tensors)
-        orig_target_sizes = torch.tensor([[640, 640] for image in images]).cuda()
+        orig_target_sizes = torch.tensor([[640, 640] for image in images]).to(self.device)
         predictions = self.postprocessor(outputs, orig_target_sizes)
         converted_predictions = [self._convert_predictions(pred) for pred in predictions]
 
@@ -248,7 +249,7 @@ def main(args):
             cfg.model.load_state_dict(state)
             predictions_view = dataset.take(500, seed=51)
 
-            model = CustomModel(cfg)
+            model = CustomModel(cfg, device=args.device)
             L = model.model.decoder.decoder.eval_idx
             # Apply models and save predictions in different label fields
             for i in [L]:
@@ -302,6 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', '-c', type=str)
     parser.add_argument('--resume', '-r', type=str)
     parser.add_argument('--port', '-p', type=int)
+    parser.add_argument('--device', type=str, default='cuda', help='device (cpu, cuda, xpu)')
     args = parser.parse_args()
 
     main(args)
