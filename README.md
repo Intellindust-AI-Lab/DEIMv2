@@ -583,4 +583,4 @@ Our work is built upon [LightlyTrain](https://github.com/lightly-ai/lightly-trai
 
 ## 7. Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Intellindust-AI-Lab/DEIMv2&type=Date)](https://www.star-history.com/#Intellindust-AI-Lab/DEIMv2&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=Intellindust-AI-Lab/DEIMv2&type=Date)](https://star-history.dera.page/#Intellindust-AI-Lab/DEIMv2&Date)
