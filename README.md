@@ -164,7 +164,7 @@ pip install -r requirements.txt
 
 ### 2.1.1 Intel XPU
 
-Install an XPU-enabled PyTorch build before the remaining project dependencies. Do not install the CUDA-pinned `torch` and `torchvision` entries from `requirements.txt` into this environment.
+Install an XPU-enabled PyTorch build following the [Intel PyTorch Get Started guide](https://pytorch.org/get-started/locally/), then install the remaining project dependencies:
 
 ```shell
 pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
@@ -178,7 +178,7 @@ python train.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -d xpu --use-amp
 python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -r model.pth -i image.jpg -d xpu
 ```
 
-For multiple XPUs, use `torchrun` (DDP), not `DataParallel`; XPU DDP also requires an XPU-capable distributed backend in the installed PyTorch build. TensorRT tools and ONNX Runtime GPU inference are CUDA-only. ONNX export runs on CPU and can be used with external OpenVINO tooling for Intel deployment.
+For multiple XPUs use `torchrun` with DDP (not DataParallel).
 
 
 ### 2.2 Data Preparation
@@ -335,6 +335,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --use-amp --seed=0
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0
     ```
 
 2. Testing
@@ -344,6 +350,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --test-only -r model.pth
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --test-only -r model.pth
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --test-only -r model.pth
     ```
 
 3. Tuning
@@ -353,6 +365,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --use-amp --seed=0 -t model.pth
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0 -t model.pth
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0 -t model.pth
     ```
 </details>
 
@@ -499,8 +517,6 @@ DEIMCriterion:
     trtexec --onnx="model.onnx" --saveEngine="model.engine" --fp16
     ```
 
-    TensorRT export and `.engine` inference require NVIDIA CUDA; they do not support Intel XPU.
-
 ⚠️ **TensorRT Version Notes**
 
 - ✅ Recommended: **Use TensorRT ≥ 10.6 for FP16 inference** to ensure stable execution and correct detection results.
@@ -536,8 +552,6 @@ DEIMCriterion:
     python tools/inference/torch_inf.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth --input image.jpg --device cuda:0
     python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -r model.pth --input image.jpg --device xpu
     ```
-
-    `trt_inf.py` and `trt_benchmark.py` are NVIDIA TensorRT/CUDA-only. `onnx_inf.py` supports ONNX Runtime CPU/CUDA providers, not XPU.
 </details>
 
 <details>
@@ -568,7 +582,7 @@ DEIMCriterion:
     ```
 2. Voxel51 Fiftyone Visualization ([fiftyone](https://github.com/voxel51/fiftyone))
     ```shell
-    python tools/visualization/fiftyone_vis.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth
+    python tools/visualization/fiftyone_vis.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth # --device cuda:0 / xpu:0 / xpu / cpu
     ```
 </details>
 
