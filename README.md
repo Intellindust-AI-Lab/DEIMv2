@@ -162,6 +162,24 @@ conda activate deimv2
 pip install -r requirements.txt
 ```
 
+### 2.1.1 Intel XPU
+
+Install an XPU-enabled PyTorch build following the [Intel PyTorch Get Started guide](https://pytorch.org/get-started/locally/), then install the remaining project dependencies:
+
+```shell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+pip install faster-coco-eval PyYAML tensorboard scipy calflops transformers
+```
+
+Use `-d xpu` for single-device training and PyTorch inference:
+
+```shell
+python train.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -d xpu --use-amp
+python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_atto_coco.yml -r model.pth -i image.jpg -d xpu
+```
+
+For multiple XPUs use `torchrun` with DDP (not DataParallel).
+
 
 ### 2.2 Data Preparation
 
@@ -317,6 +335,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --use-amp --seed=0
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0
     ```
 
 2. Testing
@@ -326,6 +350,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --test-only -r model.pth
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --test-only -r model.pth
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --test-only -r model.pth
     ```
 
 3. Tuning
@@ -335,6 +365,12 @@ ckpts/
 
     # for HGNetv2-based variants
     CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml --use-amp --seed=0 -t model.pth
+
+    # Intel XPU (single device)
+    python train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0 -t model.pth
+
+    # Intel XPU (multi-device via torchrun)
+    torchrun --master_port=7777 --nproc_per_node=4 train.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -d xpu --use-amp --seed=0 -t model.pth
     ```
 </details>
 
@@ -514,6 +550,7 @@ DEIMCriterion:
     python tools/inference/onnx_inf.py --onnx model.onnx --input image.jpg  # video.mp4
     python tools/inference/trt_inf.py --trt model.engine --input image.jpg
     python tools/inference/torch_inf.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth --input image.jpg --device cuda:0
+    python tools/inference/torch_inf.py -c configs/deimv2/deimv2_hgnetv2_${model}_coco.yml -r model.pth --input image.jpg --device xpu
     ```
 </details>
 
@@ -545,7 +582,7 @@ DEIMCriterion:
     ```
 2. Voxel51 Fiftyone Visualization ([fiftyone](https://github.com/voxel51/fiftyone))
     ```shell
-    python tools/visualization/fiftyone_vis.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth
+    python tools/visualization/fiftyone_vis.py -c configs/deimv2/deimv2_dinov3_${model}_coco.yml -r model.pth # --device cuda:0 / xpu:0 / xpu / cpu
     ```
 </details>
 
