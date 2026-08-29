@@ -126,7 +126,7 @@ class YAMLConfig(BaseConfig):
         for pg in cfg['params']:
             pattern = pg['params']
             params = {k: v for k, v in model.named_parameters() if v.requires_grad and len(re.findall(pattern, k)) > 0}
-            pg['params'] = params.values()
+            pg['params'] = list(params.items())
             param_groups.append(pg)
             visited.extend(list(params.keys()))
             # print(params.keys())
@@ -136,7 +136,7 @@ class YAMLConfig(BaseConfig):
         if len(visited) < len(names):
             unseen = set(names) - set(visited)
             params = {k: v for k, v in model.named_parameters() if v.requires_grad and k in unseen}
-            param_groups.append({'params': params.values()})
+            param_groups.append({'params': list(params.items())})
             visited.extend(list(params.keys()))
             # print(params.keys())
 

@@ -14,7 +14,6 @@ from typing import Iterable
 import torch
 import torch.amp
 from torch.utils.tensorboard import SummaryWriter
-from torch.cuda.amp.grad_scaler import GradScaler
 
 from ..optim import ModelEMA, Warmup
 from ..data import CocoEvaluator
@@ -34,7 +33,7 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
     writer :SummaryWriter = kwargs.get('writer', None)
 
     ema :ModelEMA = kwargs.get('ema', None)
-    scaler :GradScaler = kwargs.get('scaler', None)
+    scaler :torch.amp.GradScaler = kwargs.get('scaler', None)
     lr_warmup_scheduler :Warmup = kwargs.get('lr_warmup_scheduler', None)
 
     cur_iters = epoch * len(data_loader)
