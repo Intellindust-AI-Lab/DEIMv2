@@ -464,6 +464,43 @@ DEIMCriterion:
 
 </details>
 
+### Optional COCO evaluation backend
+
+The evaluator uses faster-coco-eval by default. To select
+[ultrafast-pycocotools](https://github.com/developer0hye/ultrafast-pycocotools),
+install it in addition to the existing requirements:
+
+```shell
+pip install "ultrafast-pycocotools>=0.1.11,<0.2"
+```
+
+Add `backend: ultrafast` to the evaluator configuration:
+
+```yaml
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox']
+  backend: ultrafast
+```
+
+Alternatively, append `-u evaluator.backend=ultrafast` to an existing training or
+`--test-only` command. The option also supports segmentation and keypoint outputs.
+Dataset loading and summary formatting continue to use faster-coco-eval, while
+ultrafast performs matching, accumulation and batched mask encoding.
+
+Prepared predictions are gathered across ranks, deduplicated by image ID while
+keeping the first occurrence in rank/batch order, and evaluated during
+synchronization. The existing stats, custom detection caps and area ranges are
+preserved, and `cleanup()` clears state between epochs. Backend selection is local
+to each evaluator; it does not replace process-wide imports. Performance comparisons
+should include the complete evaluation lifecycle, including synchronization.
+
+With both backends and pytest installed, run the regression and parity tests with:
+
+```shell
+PYTHONPATH=. python -m pytest tests/test_coco_backend.py
+```
+
 ## 4. Tools
 <details>
 <summary> 4.1 Deployment </summary>
