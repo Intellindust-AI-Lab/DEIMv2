@@ -4,11 +4,11 @@ Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 """
 
 
-import torch.cuda.amp as amp
+import torch
 
 from ..core import register
 
 
 __all__ = ['GradScaler']
 
-GradScaler = register()(amp.grad_scaler.GradScaler)
+GradScaler = register()(torch.amp.GradScaler)
