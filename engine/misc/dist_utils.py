@@ -26,6 +26,23 @@ from torch.utils.data import DistributedSampler
 from ..data import DataLoader
 
 
+def _accelerator_module():
+    """Return the active accelerator module (torch.xpu or torch.cuda), or None on CPU-only setups."""
+    if torch.cuda.is_available():
+        return torch.cuda
+    if getattr(torch, 'xpu', None) is not None and torch.xpu.is_available():
+        return torch.xpu
+    return None
+
+
+def current_device() -> str:
+    """Return the device type string ('xpu', 'cuda' or 'cpu') for the active accelerator."""
+    accelerator = _accelerator_module()
+    if accelerator is None:
+        return 'cpu'
+    return accelerator.__name__.rsplit('.', 1)[-1]
+
+
 def setup_distributed(print_rank: int=0, print_method: str='builtin', seed: int=None, ):
     """
     env setup
@@ -40,13 +57,17 @@ def setup_distributed(print_rank: int=0, print_method: str='builtin', seed: int=
         LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))
         WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
-        # torch.distributed.init_process_group(backend=backend, init_method='env://')
-        torch.distributed.init_process_group(init_method='env://')
+        accelerator = _accelerator_module()
+        if accelerator is not None:
+            accelerator.set_device(LOCAL_RANK)
+            accelerator.empty_cache()
+
+        xccl_available = getattr(torch.distributed, 'is_xccl_available', lambda: False)()
+        backend = 'xccl' if current_device() == 'xpu' and xccl_available else None
+        torch.distributed.init_process_group(backend=backend, init_method='env://')
         torch.distributed.barrier()
 
         rank = torch.distributed.get_rank()
-        torch.cuda.set_device(rank)
-        torch.cuda.empty_cache()
         enabled_dist = True
         if get_rank() == print_rank:
             print('Initialized distributed mode...')
@@ -137,9 +158,15 @@ def warp_model(
         rank = get_rank()
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model) if sync_bn else model
         if dist_mode == 'dp':
+            if current_device() != 'cuda':
+                raise RuntimeError('DataParallel is only supported for CUDA; use DDP for XPU.')
             model = DP(model, device_ids=[rank], output_device=rank)
         elif dist_mode == 'ddp':
-            model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=find_unused_parameters)
+            if current_device() == 'cuda':
+                model = DDP(model, device_ids=[rank], output_device=rank,
+                            find_unused_parameters=find_unused_parameters)
+            else:
+                model = DDP(model, device_ids=None, find_unused_parameters=find_unused_parameters)
         else:
             raise AttributeError('')
 
@@ -220,8 +247,9 @@ def all_gather(data):
 def sync_time():
     """sync_time
     """
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    accelerator = _accelerator_module()
+    if accelerator is not None:
+        accelerator.synchronize()
 
     return time.time()
 
@@ -238,6 +266,8 @@ def setup_seed(seed: int, deterministic=False):
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    elif getattr(torch, 'xpu', None) is not None and torch.xpu.is_available():
+        torch.xpu.manual_seed_all(seed)
 
     # memory will be large when setting deterministic to True
     if torch.backends.cudnn.is_available() and deterministic:
@@ -248,6 +278,9 @@ def setup_seed(seed: int, deterministic=False):
 def check_compile():
     import torch
     import warnings
+    if current_device() == 'xpu':
+        # the NVIDIA compute-capability check below does not apply to XPU
+        return True
     gpu_ok = False
     if torch.cuda.is_available():
         device_cap = torch.cuda.get_device_capability()
